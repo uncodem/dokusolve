@@ -2,6 +2,10 @@ package main
 
 import "container/heap"
 
+type CellPosition struct {
+	X, Y int
+}
+
 func buildCandidates(b Board) [9][9]CandidatePool {
 	ret := [9][9]CandidatePool{}
 
@@ -19,7 +23,7 @@ func buildCandidates(b Board) [9][9]CandidatePool {
 }
 
 func buildCandidateHeap(b Board) CandidateHeap {
-	ret := make(CandidateHeap, 0)
+	ret := make(CandidateHeap, 0, 27)
 	heap.Init(&ret)
 	candidates := buildCandidates(b)
 
@@ -37,8 +41,9 @@ func buildCandidateHeap(b Board) CandidateHeap {
 	return ret
 }
 
-// updatePeers :: int -> int -> int -> CandidateMatrix -> invalid?
-func updatePeers(x, y, v int, candidates *[9][9]CandidatePool) bool {
+// updatePeers :: int -> int -> int -> CandidateMatrix -> (invalid?, NewSingletons)
+func updatePeers(x, y, v int, candidates *[9][9]CandidatePool) (bool, []CellPosition) {
+	ret := make([]CellPosition, 0, 27)
 	sqx := (x / 3) * 3
 	sqy := (y / 3) * 3
 
@@ -52,7 +57,9 @@ func updatePeers(x, y, v int, candidates *[9][9]CandidatePool) bool {
 		if !cell.Filled {
 			cell.Remove(v)
 			if cell.Count == 0 {
-				return true
+				return true, nil
+			} else if cell.Count == 1 {
+				ret = append(ret, CellPosition{X: col, Y: y})
 			}
 		}
 	}
@@ -66,7 +73,9 @@ func updatePeers(x, y, v int, candidates *[9][9]CandidatePool) bool {
 		if !cell.Filled {
 			cell.Remove(v)
 			if cell.Count == 0 {
-				return true
+				return true, nil
+			} else if cell.Count == 1 {
+				ret = append(ret, CellPosition{X: x, Y: row})
 			}
 		}
 	}
@@ -80,14 +89,16 @@ func updatePeers(x, y, v int, candidates *[9][9]CandidatePool) bool {
 
 			cell := &candidates[sqy+sy][sqx+sx]
 			if !cell.Filled {
-				cell.Remove(v)
-				if cell.Count == 0 {
-					return true
+				removed := cell.Remove(v)
+				if removed && cell.Count == 0 {
+					return true, nil
+				} else if removed && cell.Count == 1 {
+					ret = append(ret, CellPosition{X: sqx + sx, Y: sqy + sy})
 				}
 			}
 		}
 	}
-	return false
+	return false, ret
 }
 
 // singletonSweep :: Board -> (Board' * Solvable?)
@@ -95,23 +106,23 @@ func singletonSweep(b Board) (Board, bool) {
 	cloned := b
 	candidates := buildCandidates(b)
 
-	for {
-		changed := false
-		for y := range BSIZE {
-			for x := range BSIZE {
-				cell := &candidates[y][x]
+	for y := range BSIZE {
+		for x := range BSIZE {
+			peers := make([]CellPosition, 1, 27)
+			peers[0] = CellPosition{X: x, Y: y}
+			for i := 0; i < len(peers); i++ {
+				px, py := peers[i].X, peers[i].Y
+				cell := &candidates[peers[i].Y][peers[i].X]
 				if v := cell.Singleton(); v != -1 { // Singleton detected, value is in v
-					cloned[y][x] = v
+					cloned[py][px] = v
 					cell.Filled = true
-					changed = true
-					if updatePeers(x, y, v, &candidates) {
+					invalidated, new_peers := updatePeers(px, py, v, &candidates)
+					if invalidated {
 						return b, false
 					}
+					peers = append(peers, new_peers...)
 				}
 			}
-		}
-		if !changed {
-			break
 		}
 	}
 

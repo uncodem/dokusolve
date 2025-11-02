@@ -39,14 +39,16 @@ func (cp *CandidatePool) CalcSlice() {
 	}
 }
 
-func (cp *CandidatePool) Remove(num int) {
+func (cp *CandidatePool) Remove(num int) bool {
 	if cp.Pool[num-1] {
 		cp.Pool[num-1] = false
 		cp.Count -= 1
 		if cp.PoolSlice != nil {
 			cp.CalcSlice()
 		}
+		return true
 	}
+	return false
 }
 
 func (cp CandidatePool) Singleton() int {
